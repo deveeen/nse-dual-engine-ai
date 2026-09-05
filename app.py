@@ -20,27 +20,31 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Custom CSS for Sleek Mobile UI
+# Custom CSS for Sleek Mobile UI & Zerodha-style Order Slips
 st.markdown("""
 <style>
     .main { background-color: #0F172A; }
-    .stMetric { background-color: #1E293B; padding: 12px; border-radius: 10px; border: 1px solid #334155; }
-    .tier-box-1 { background-color: #064E3B; color: #D1FAE5; padding: 14px; border-radius: 10px; font-weight: bold; border: 1px solid #059669; margin-bottom: 15px; }
-    .tier-box-2 { background-color: #1E3A8A; color: #DBEAFE; padding: 14px; border-radius: 10px; font-weight: bold; border: 1px solid #2563EB; margin-bottom: 15px; }
-    .tier-box-3 { background-color: #451A03; color: #FEF3C7; padding: 14px; border-radius: 10px; font-weight: bold; border: 1px solid #D97706; margin-bottom: 15px; }
-    .tier-box-4 { background-color: #374151; color: #F3F4F6; padding: 14px; border-radius: 10px; font-weight: bold; border: 1px solid #6B7280; margin-bottom: 15px; }
-    .tier-box-5 { background-color: #4C1D95; color: #EDE9FE; padding: 14px; border-radius: 10px; font-weight: bold; border: 1px solid #7C3AED; margin-bottom: 15px; }
-    .tier-box-6 { background-color: #7F1D1D; color: #FEE2E2; padding: 14px; border-radius: 10px; font-weight: bold; border: 1px solid #DC2626; margin-bottom: 15px; }
+    .stMetric { background-color: #1E293B; padding: 10px; border-radius: 8px; border: 1px solid #334155; }
+    .order-slip-buy { background: linear-gradient(135deg, #064E3B 0%, #022C22 100%); border: 1.5px solid #10B981; border-radius: 12px; padding: 16px; margin: 12px 0; }
+    .order-slip-sell { background: linear-gradient(135deg, #7F1D1D 0%, #450A0A 100%); border: 1.5px solid #EF4444; border-radius: 12px; padding: 16px; margin: 12px 0; }
+    .order-slip-hold { background: linear-gradient(135deg, #374151 0%, #1F2937 100%); border: 1.5px solid #6B7280; border-radius: 12px; padding: 16px; margin: 12px 0; }
+    .tier-box-1 { background-color: #064E3B; color: #D1FAE5; padding: 14px; border-radius: 10px; font-weight: bold; border: 1px solid #059669; margin-bottom: 12px; }
+    .tier-box-2 { background-color: #1E3A8A; color: #DBEAFE; padding: 14px; border-radius: 10px; font-weight: bold; border: 1px solid #2563EB; margin-bottom: 12px; }
+    .tier-box-3 { background-color: #451A03; color: #FEF3C7; padding: 14px; border-radius: 10px; font-weight: bold; border: 1px solid #D97706; margin-bottom: 12px; }
+    .tier-box-4 { background-color: #374151; color: #F3F4F6; padding: 14px; border-radius: 10px; font-weight: bold; border: 1px solid #6B7280; margin-bottom: 12px; }
+    .tier-box-5 { background-color: #4C1D95; color: #EDE9FE; padding: 14px; border-radius: 10px; font-weight: bold; border: 1px solid #7C3AED; margin-bottom: 12px; }
+    .tier-box-6 { background-color: #7F1D1D; color: #FEE2E2; padding: 14px; border-radius: 10px; font-weight: bold; border: 1px solid #DC2626; margin-bottom: 12px; }
     .block-container { padding-top: 1.2rem; padding-bottom: 2rem; }
-    .stTabs [data-baseweb="tab-list"] { gap: 8px; }
-    .stTabs [data-baseweb="tab"] { background-color: #1E293B; border-radius: 6px; padding: 8px 16px; color: #94A3B8; }
-    .stTabs [aria-selected="true"] { background-color: #0284C7 !important; color: white !important; font-weight: bold; }
+    .badge-buy { background-color: #10B981; color: #064E3B; padding: 4px 10px; border-radius: 6px; font-weight: 900; font-size: 13px; }
+    .badge-sell { background-color: #EF4444; color: #7F1D1D; padding: 4px 10px; border-radius: 6px; font-weight: 900; font-size: 13px; }
+    .badge-type { background-color: #3B82F6; color: white; padding: 4px 8px; border-radius: 6px; font-weight: bold; font-size: 12px; }
+    .badge-dur { background-color: #8B5CF6; color: white; padding: 4px 8px; border-radius: 6px; font-weight: bold; font-size: 12px; }
 </style>
 """, unsafe_allow_html=True)
 
 # App Header
 st.title("🏛️ Dual-Engine NSE AI")
-st.caption("Multi-Timeframe Technicals (1D/1W/1M) × 5-Yr Empirical Backtest × Fundamental Moats")
+st.caption("Quantitative Technicals (1D/1W/1M) × 5-Yr Empirical Backtest × Fundamental Moats")
 
 # Helper Indicators
 def calc_rsi(series, period=14):
@@ -69,20 +73,20 @@ def fetch_stock_data(clean_sym):
 
 # Navigation Tabs
 tab1, tab2, tab3, tab4 = st.tabs([
-    "🔍 On-Demand Screener", 
+    "🔍 On-Demand Screener & GTT", 
     "🏆 6-Tier Master Matrix", 
     "💼 Portfolio Restructuring", 
     "📈 5-Yr Quant Backtest"
 ])
 
 # --------------------------------------------------------------------------------------
-# TAB 1: ON-DEMAND STOCK SCREENER
+# TAB 1: ON-DEMAND STOCK SCREENER & GTT ORDER SLIP
 # --------------------------------------------------------------------------------------
 with tab1:
-    st.markdown("#### 🔍 Instant Stock Deep-Dive")
+    st.markdown("#### 🔍 Instant Stock Deep-Dive & GTT Orders")
     
     # Quick Tap Chips for Mobile
-    st.write("**Quick Tap:**")
+    st.write("**Quick Tap Candidates:**")
     quick_cols = st.columns(6)
     selected_quick = None
     if quick_cols[0].button("HAL"): selected_quick = "HAL"
@@ -102,7 +106,7 @@ with tab1:
         
     if stock_query:
         clean_sym = stock_query.replace(".NS", "")
-        with st.spinner(f"Analyzing {clean_sym} across Daily, Weekly, Monthly & Fundamentals..."):
+        with st.spinner(f"Running Dual-Engine analysis for {clean_sym}..."):
             try:
                 df_d, df_w, df_m, info = fetch_stock_data(clean_sym)
                 
@@ -160,59 +164,141 @@ with tab1:
                     net_cash_cr = tot_cash - tot_debt
                     div_yield = info.get('dividendYield', 0)
                     
-                    # 6-Tier Classification Logic
-                    if (npm and npm < 0) or clean_sym in ['OLAELEC', 'BATAINDIA']:
+                    # 6-Tier Classification & Order Action Logic
+                    order_action = "BUY"
+                    order_type = "CNC (Delivery / Swing)"
+                    order_validity = "GTT (Good Till Triggered — 1 Year)"
+                    time_horizon = "2 to 8 Weeks (Positional Swing)"
+                    slip_class = "order-slip-buy"
+                    badge_action_class = "badge-buy"
+                    
+                    if (npm and npm < 0) or clean_sym in ['OLAELEC', 'BATAINDIA', 'CLEAN']:
                         tier_name = "TIER 6: ❌ Dead-Capital Exit (Liquidate Immediately)"
                         tier_desc = "Severe cash burn / Structural loss of competitive moat. Do not hold."
                         tier_css = "tier-box-6"
+                        order_action = "SELL / EXIT"
+                        order_type = "CNC (Sell Delivery)"
+                        order_validity = "IMMEDIATE (Market / Limit Order)"
+                        time_horizon = "Immediate Execution"
+                        slip_class = "order-slip-sell"
+                        badge_action_class = "badge-sell"
                     elif clean_sym == 'KPITTECH':
                         tier_name = "TIER 4: ⏸️ Frozen / No-Add Watchlist"
                         tier_desc = "Hold existing shares (1.75% weight). DO NOT average down until a weekly hammer forms above ₹620."
                         tier_css = "tier-box-4"
+                        order_action = "HOLD / DO NOT ADD"
+                        order_type = "CNC (Hold Existing)"
+                        order_validity = "WAIT & WATCH (No Trade)"
+                        time_horizon = "Monitor Weekly Close"
+                        slip_class = "order-slip-hold"
+                        badge_action_class = "badge-type"
                     elif clean_sym == 'GREENPANEL':
-                        tier_name = "TIER 5: 🛰️ High-Upside Cyclical Satellite (Cap at 2.5% max)"
-                        tier_desc = "1.43x P/B asset protection with BIS import tariff catalyst. High-asymmetry turnaround play."
+                        tier_name = "TIER 5: 🛰️ High-Upside Cyclical Satellite"
+                        tier_desc = "1.43x P/B asset protection with BIS import tariff catalyst. Cap allocation at 2.5% max (₹35k)."
                         tier_css = "tier-box-5"
+                        order_action = "BUY (Tranche 1 - Satellite)"
+                        order_type = "CNC (Delivery / Turnaround)"
+                        order_validity = "GTT (365 Days)"
+                        time_horizon = "3 to 12 Months (Cyclical Recovery)"
                     elif (w_bias == "BULLISH" or cur_price > sma20_w) and (isinstance(de, (int, float)) and de < 50) and (isinstance(pe_fwd, (int, float)) and pe_fwd < 35):
                         tier_name = "TIER 1: 🟢 Triple-Confirmed High-Conviction Buy"
                         tier_desc = "Fundamental Monopoly + Technical Breakout + Clean Balance Sheet. Execute via GTT buy triggers."
                         tier_css = "tier-box-1"
+                        order_action = "BUY (Tranche 1 / Momentum)"
+                        order_type = "CNC (Delivery / Swing)"
+                        order_validity = "GTT (365 Days)"
+                        time_horizon = "4 to 12 Weeks (Breakout Wave)"
                     elif (rsi_m < 35 or rsi_w < 35) or (isinstance(pe_ttm, (int, float)) and pe_ttm < 18):
-                        tier_name = "TIER 2: 🟢 Deep-Value Contrarian Accumulation (33/33/33 Tranches)"
+                        tier_name = "TIER 2: 🟢 Deep-Value Contrarian Accumulation (33/33/33)"
                         tier_desc = "Deep valuation discount testing secular floors. Buy strictly in 33/33/33 phased tranches."
                         tier_css = "tier-box-2"
+                        order_action = "BUY (Tranche 1 - 33% Allocation)"
+                        order_type = "CNC (Delivery / Positional)"
+                        order_validity = "GTT (365 Days)"
+                        time_horizon = "3 to 9 Months (Mean-Reversion)"
                     else:
                         tier_name = "TIER 3: 🟡 Core Portfolio Anchor (Hold & Let Compound)"
                         tier_desc = "Irreplaceable compounder coiling at base. Hold existing position; do not panic sell."
                         tier_css = "tier-box-3"
+                        order_action = "HOLD / ACCUMULATE ON DIPS"
+                        order_type = "CNC (Long-Term Investment)"
+                        order_validity = "SIP / GTT on 50W SMA Retest"
+                        time_horizon = "1 to 3+ Years (Secular Compounding)"
+                        slip_class = "order-slip-hold"
+                        badge_action_class = "badge-type"
 
                     # Execution Prices
-                    trig_entry = cur_price * 1.005 if w_bias == "BULLISH" else cur_price
-                    sl_price = cur_price - (1.5 * atr_14) if w_bias == "BULLISH" else cur_price + (1.5 * atr_14)
+                    trig_entry = cur_price * 1.005 if "BUY" in order_action else cur_price
+                    limit_buy_price = trig_entry * 1.002 # 0.2% limit buffer to guarantee execution
+                    sl_price = cur_price - (1.5 * atr_14) if "BUY" in order_action else cur_price + (1.5 * atr_14)
                     risk_pct = abs((cur_price - sl_price) / cur_price) * 100
-                    t0_scalp = cur_price + (0.75 * abs(cur_price - sl_price)) if w_bias == "BULLISH" else cur_price - (0.75 * abs(cur_price - sl_price))
-                    t1_swing = cur_price + (1.5 * abs(cur_price - sl_price)) if w_bias == "BULLISH" else cur_price - (1.5 * abs(cur_price - sl_price))
-                    t2_runner = cur_price + (2.5 * abs(cur_price - sl_price)) if w_bias == "BULLISH" else cur_price - (2.5 * abs(cur_price - sl_price))
+                    t0_scalp = cur_price + (0.75 * abs(cur_price - sl_price)) if "BUY" in order_action else cur_price - (0.75 * abs(cur_price - sl_price))
+                    t1_swing = cur_price + (1.5 * abs(cur_price - sl_price)) if "BUY" in order_action else cur_price - (1.5 * abs(cur_price - sl_price))
+                    t2_runner = cur_price + (2.5 * abs(cur_price - sl_price)) if "BUY" in order_action else cur_price - (2.5 * abs(cur_price - sl_price))
 
-                    # Display Cards
-                    st.markdown(f'<div class="{tier_css}"><h3>{tier_name}</h3><p style="margin-bottom:0;">{tier_desc}</p></div>', unsafe_allow_html=True)
+                    # 1. Tier Category Header
+                    st.markdown(f'<div class="{tier_css}"><h3 style="margin-top:0;">{tier_name}</h3><p style="margin-bottom:0;">{tier_desc}</p></div>', unsafe_allow_html=True)
                     
                     st.markdown(f"### 📊 {info.get('shortName', clean_sym)} — ₹{cur_price:,.2f} ({pct_ath:.1f}% from ATH)")
                     
+                    # 2. Comprehensive Zerodha/Groww-style GTT Order Card
+                    order_card_html = f"""
+                    <div class="{slip_class}">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+                            <div>
+                                <span class="{badge_action_class}">{order_action}</span>
+                                <span class="badge-type" style="margin-left:6px;">{order_type}</span>
+                                <span class="badge-dur" style="margin-left:6px;">{order_validity}</span>
+                            </div>
+                            <div style="color:#94A3B8; font-size:12px; font-weight:bold;">
+                                ⏱️ Expected Horizon: <span style="color:#F8FAFC;">{time_horizon}</span>
+                            </div>
+                        </div>
+                        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap:10px; margin-top:10px;">
+                            <div style="background:#0F172A; padding:10px; border-radius:8px; border:1px solid #334155;">
+                                <div style="font-size:11px; color:#94A3B8; font-weight:bold;">GTT TRIGGER PRICE</div>
+                                <div style="font-size:16px; color:#38BDF8; font-weight:900;">₹{trig_entry:,.2f}</div>
+                                <div style="font-size:10px; color:#64748B;">Place Stop-Limit above</div>
+                            </div>
+                            <div style="background:#0F172A; padding:10px; border-radius:8px; border:1px solid #334155;">
+                                <div style="font-size:11px; color:#94A3B8; font-weight:bold;">LIMIT BUY PRICE</div>
+                                <div style="font-size:16px; color:#F8FAFC; font-weight:900;">₹{limit_buy_price:,.2f}</div>
+                                <div style="font-size:10px; color:#64748B;">+0.2% fill buffer</div>
+                            </div>
+                            <div style="background:#0F172A; padding:10px; border-radius:8px; border:1px solid #334155;">
+                                <div style="font-size:11px; color:#94A3B8; font-weight:bold;">STOP LOSS (1.5x ATR)</div>
+                                <div style="font-size:16px; color:#F87171; font-weight:900;">₹{sl_price:,.2f}</div>
+                                <div style="font-size:10px; color:#EF4444;">Risk: -{risk_pct:.2f}%</div>
+                            </div>
+                            <div style="background:#0F172A; padding:10px; border-radius:8px; border:1px solid #334155;">
+                                <div style="font-size:11px; color:#94A3B8; font-weight:bold;">TARGET 0 (SCALP)</div>
+                                <div style="font-size:16px; color:#34D399; font-weight:900;">₹{t0_scalp:,.2f}</div>
+                                <div style="font-size:10px; color:#10B981;">Trail SL to Cost here</div>
+                            </div>
+                            <div style="background:#0F172A; padding:10px; border-radius:8px; border:1px solid #334155;">
+                                <div style="font-size:11px; color:#94A3B8; font-weight:bold;">TARGET 1 (SWING)</div>
+                                <div style="font-size:16px; color:#10B981; font-weight:900;">₹{t1_swing:,.2f}</div>
+                                <div style="font-size:10px; color:#10B981;">Book 50% & Trail SL</div>
+                            </div>
+                            <div style="background:#0F172A; padding:10px; border-radius:8px; border:1px solid #334155;">
+                                <div style="font-size:11px; color:#94A3B8; font-weight:bold;">TARGET 2 (RUNNER)</div>
+                                <div style="font-size:16px; color:#6EE7B7; font-weight:900;">₹{t2_runner:,.2f}</div>
+                                <div style="font-size:10px; color:#10B981;">Final 1:2.5 R:R Target</div>
+                            </div>
+                        </div>
+                    </div>
+                    """
+                    st.markdown(order_card_html, unsafe_allow_html=True)
+                    
+                    # 3. Fast Metric Summary
                     m1, m2, m3, m4 = st.columns(4)
                     m1.metric("Weekly Pattern", f"{w_pattern}", f"{vol_ratio_w:.2f}x Vol")
                     m2.metric("Weekly RSI", f"{rsi_w:.1f}")
                     m3.metric("Monthly RSI", f"{rsi_m:.1f}")
                     m4.metric("Forward P/E", f"{pe_fwd if pe_fwd != 'N/A' else pe_ttm}")
                     
-                    st.markdown("#### 🎯 Execution Triggers & Orders")
-                    g1, g2, g3, g4 = st.columns(4)
-                    g1.metric("GTT Buy Trigger", f"₹{trig_entry:,.2f}", "Stop-Limit")
-                    g2.metric("Stop Loss (ATR)", f"₹{sl_price:,.2f}", f"-{risk_pct:.2f}% Risk")
-                    g3.metric("Target 0 (Scalp)", f"₹{t0_scalp:,.2f}", "Trail SL to Cost")
-                    g4.metric("Target 1 (Swing)", f"₹{t1_swing:,.2f}", "Book 50%")
-                    
-                    with st.expander("🔍 In-Depth Technical & Fundamental Metrics"):
+                    # 4. Detailed Technical & Fundamental Dropdown
+                    with st.expander("🔍 In-Depth Technical & Fundamental Diagnostics"):
                         col_a, col_b = st.columns(2)
                         with col_a:
                             st.write(f"• **Current Market Price:** ₹{cur_price:,.2f}")
@@ -242,20 +328,23 @@ with tab2:
     t1_box = """<div class="tier-box-1">
     <h4>TIER 1: TRIPLE-CONFIRMED HIGH-CONVICTION BUYS</h4>
     <p><b>Approved Universe:</b> HAL, SOLARINDS, CHOLAFIN, NEWGEN, TATAELXSI<br/>
-    <b>Rationale:</b> Fundamental Monopoly + Technical Breakout + Institutional Volume (>1.2x). Deploy via GTT triggers.</p>
+    <b>Action & Order Type:</b> <b>BUY (CNC Delivery / Swing)</b> | GTT Order (365 Days Validity)<br/>
+    <b>Rationale:</b> Fundamental Monopoly + Technical Breakout + Institutional Volume (>1.2x).</p>
     </div>"""
     st.markdown(t1_box, unsafe_allow_html=True)
     
     t2_box = """<div class="tier-box-2">
     <h4>TIER 2: DEEP-VALUE CONTRARIAN REVERSALS</h4>
     <p><b>Approved Universe:</b> MUTHOOTFIN, HDFCBANK, ITC, TATAPOWER<br/>
-    <b>Rationale:</b> Deep valuation discounts (RSI < 30 / P/E < 15x) testing secular floors. <b>Strictly buy in 33/33/33 phased tranches</b>.</p>
+    <b>Action & Order Type:</b> <b>BUY in 33/33/33 Phased Tranches (CNC Delivery)</b> | Horizon: 3 to 9 Months<br/>
+    <b>Rationale:</b> Deep valuation discounts (RSI < 30 / P/E < 15x) testing secular floors.</p>
     </div>"""
     st.markdown(t2_box, unsafe_allow_html=True)
     
     t3_box = """<div class="tier-box-3">
     <h4>TIER 3: CORE PORTFOLIO ANCHORS (LET COMPOUND)</h4>
     <p><b>Approved Universe:</b> HDFCAMC, RELIANCE, MOTILALOFS, RADICO, TCS, INFY<br/>
+    <b>Action & Order Type:</b> <b>HOLD EXISTING (CNC Investment)</b> | Horizon: 1 to 3+ Years<br/>
     <b>Rationale:</b> Irreplaceable compounders coiling at bases. <b>DO NOT PANIC SELL</b> on short-term weekly noise.</p>
     </div>"""
     st.markdown(t3_box, unsafe_allow_html=True)
@@ -263,20 +352,23 @@ with tab2:
     t4_box = """<div class="tier-box-4">
     <h4>TIER 4: FROZEN / NO-ADD WATCHLIST</h4>
     <p><b>Approved Universe:</b> KPITTECH<br/>
-    <b>Rationale:</b> <b>HOLD existing 55 shares (1.75% wt).</b> DO NOT average down into freefall until a weekly hammer confirms accumulation above ₹620.</p>
+    <b>Action & Order Type:</b> <b>HOLD Existing (1.75% wt) / NO FRESH ORDERS</b> | Validity: Wait for Weekly Hammer > ₹620<br/>
+    <b>Rationale:</b> Do NOT average down into a falling knife until an accumulation base confirms.</p>
     </div>"""
     st.markdown(t4_box, unsafe_allow_html=True)
     
     t5_box = """<div class="tier-box-5">
     <h4>TIER 5: SPECULATIVE CYCLICAL SATELLITE</h4>
     <p><b>Approved Universe:</b> GREENPANEL<br/>
-    <b>Rationale:</b> MDF Market Leader (1.43x P/B, BIS Tariff Catalyst). <b>Cap strictly at 2.5% portfolio weight (₹35k max)</b>.</p>
+    <b>Action & Order Type:</b> <b>BUY Satellite (CNC Delivery)</b> | Cap strictly at 2.5% portfolio weight (₹35k max)<br/>
+    <b>Rationale:</b> MDF Market Leader (1.43x P/B, BIS Tariff Catalyst). Turnaround opportunity.</p>
     </div>"""
     st.markdown(t5_box, unsafe_allow_html=True)
     
     t6_box = """<div class="tier-box-6">
     <h4>TIER 6: DEAD-CAPITAL EXITS (LIQUIDATE IMMEDIATELY)</h4>
     <p><b>Approved Universe:</b> OLAELEC, BATAINDIA, CLEAN<br/>
+    <b>Action & Order Type:</b> <b>SELL / EXIT (Market / Limit Order)</b> | Validity: Immediate Execution<br/>
     <b>Rationale:</b> Negative margins (-64%), cash burn, loss of brand moat, and continuous technical downtrends. Liberates ₹73,157 cash.</p>
     </div>"""
     st.markdown(t6_box, unsafe_allow_html=True)
@@ -291,19 +383,19 @@ with tab3:
     c_f1, c_f2 = st.columns(2)
     with c_f1:
         st.markdown("#### 💰 Freed Capital Generator")
-        st.write("• **Exit Dead Capital:** `OLAELEC` + `BATAINDIA` + `CLEAN` -> **+₹73,157**")
-        st.write("• **De-Risk Waaree Group by 50%:** `WAAREEENER` + `WAAREERTL` -> **+₹1,01,221**")
-        st.write("• **Trim HDFCAMC by 50%:** Lock in gains at P/B 11.4x -> **+₹55,417**")
+        st.write("• **Exit Dead Capital:** `OLAELEC` + `BATAINDIA` + `CLEAN` -> **+₹73,157** (Immediate Sell)")
+        st.write("• **De-Risk Waaree Group by 50%:** `WAAREEENER` + `WAAREERTL` -> **+₹1,01,221** (Sell 50%)")
+        st.write("• **Trim HDFCAMC by 50%:** Lock in gains at P/B 11.4x -> **+₹55,417** (Sell 50%)")
         st.metric("Total Liquid Cash Liberated", "₹2,29,795 (~₹2.30 Lakhs)")
         
     with c_f2:
-        st.markdown("#### 🎯 33/33/33 Phased Re-Deployment")
+        st.markdown("#### 🎯 33/33/33 Phased Re-Deployment Plan")
         deploy_df = pd.DataFrame([
-            {"Candidate": "HAL", "Allocation": "₹60,000", "Role": "Defence Monopoly", "Tranche 1 (33%)": "₹20,000 @ GTT ₹4,936"},
-            {"Candidate": "NEWGEN", "Allocation": "₹50,000", "Role": "Software IP", "Tranche 1 (33%)": "₹17,000 @ ₹526"},
-            {"Candidate": "TATAELXSI", "Allocation": "₹45,000", "Role": "Tata ER&D Leader", "Tranche 1 (33%)": "₹15,000 @ ₹3,558"},
-            {"Candidate": "TATAPOWER", "Allocation": "₹40,000", "Role": "Clean Energy", "Tranche 1 (33%)": "₹13,000 @ ₹368"},
-            {"Candidate": "GREENPANEL", "Allocation": "₹35,000", "Role": "Cyclical Turnaround", "Tranche 1 (33%)": "₹12,000 @ ₹158"},
+            {"Candidate": "HAL", "Action": "BUY (CNC)", "Allocation": "₹60,000", "Tranche 1 (33%)": "₹20,000 @ GTT ₹4,936", "Horizon": "4-12 Wks"},
+            {"Candidate": "NEWGEN", "Action": "BUY (CNC)", "Allocation": "₹50,000", "Tranche 1 (33%)": "₹17,000 @ ₹526", "Horizon": "3-9 Mos"},
+            {"Candidate": "TATAELXSI", "Action": "BUY (CNC)", "Allocation": "₹45,000", "Tranche 1 (33%)": "₹15,000 @ ₹3,558", "Horizon": "3-9 Mos"},
+            {"Candidate": "TATAPOWER", "Action": "BUY (CNC)", "Allocation": "₹40,000", "Tranche 1 (33%)": "₹13,000 @ ₹368", "Horizon": "2-6 Mos"},
+            {"Candidate": "GREENPANEL", "Action": "BUY (CNC)", "Allocation": "₹35,000", "Tranche 1 (33%)": "₹12,000 @ ₹158", "Horizon": "6-18 Mos"},
         ])
         st.dataframe(deploy_df, use_container_width=True, hide_index=True)
 
