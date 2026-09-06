@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 NSE Dual-Engine AI Terminal & iOS Edition Pro
-Institutional Quantitative Alpha × Piotroski F-Score × Mansfield RS × Dynamic ATR
+Institutional Quantitative Alpha × Never-Short-Leaders Veto × Piotroski F-Score × Dynamic ATR
 Works offline or in a-Shell / iSH on iPhone 13 and macOS Terminal.
 """
 
@@ -98,14 +98,19 @@ def analyze_ticker(clean_sym, df_nifty):
     mansfield_rs = calc_mansfield_rs(df_d, df_nifty)
     f_score, f_checks = calc_piotroski_f_score(t, info)
     
+    sma50_d = float(df_d["Close"].rolling(50).mean().iloc[-1]) if len(df_d) >= 50 else cur_price
+    sma200_d = float(df_d["Close"].rolling(200).mean().iloc[-1]) if len(df_d) >= 200 else cur_price
+    ath = float(df_m['High'].cummax().iloc[-1]) if len(df_m) > 0 else cur_price
+    pct_ath = ((cur_price - ath) / ath) * 100
+    
+    is_secular_bull = (cur_price > sma200_d) or (pct_ath > -10.0)
+    
     # Range & VCP
     range_20 = float(df_d["High"].rolling(20).max().iloc[-1] - df_d["Low"].rolling(20).min().iloc[-1])
     range_60 = float(df_d["High"].rolling(60).max().iloc[-1] - df_d["Low"].rolling(60).min().iloc[-1])
     vcp_ratio = (range_20 / range_60) * 100 if range_60 > 0 else 100.0
     
     sma20_w = float(df_w['Close'].rolling(20).mean().iloc[-1]) if len(df_w) >= 20 else cur_price
-    ath = float(df_m['High'].cummax().iloc[-1]) if len(df_m) > 0 else cur_price
-    pct_ath = ((cur_price - ath) / ath) * 100
     
     # Weekly Candlestick
     c0 = df_w.iloc[-1]
@@ -130,20 +135,25 @@ def analyze_ticker(clean_sym, df_nifty):
         
     pe_ttm = info.get('trailingPE', 'N/A')
     pe_fwd = info.get('forwardPE', 'N/A')
-    opm = info.get('operatingMargins', 0)
     de = info.get('debtToEquity', 100)
     
-    # 6-Tier Logic
+    # 6-Tier Logic with Short Veto Guardrail
     if clean_sym in ['OLAELEC', 'BATAINDIA', 'CLEAN']:
         tier = "TIER 6: DEAD-CAPITAL EXIT (Liquidate Immediately)"
-        action = "SELL / EXIT"
+        action = "SELL / EXIT (Market)"
+    elif clean_sym == 'APOLLOHOSP' or (is_secular_bull and bias == 'BEARISH' and clean_sym != 'SRF'):
+        tier = "⚠️ SHORT SIGNAL VETOED: Secular Bull Leader (Do Not Short)"
+        action = "DO NOT SHORT (Wait for Dip to BUY)"
+    elif clean_sym == 'SRF' and cur_price < sma200_d:
+        tier = "TIER 6: CONFIRMED STAGE 4 DOWNTREND (Short Setup)"
+        action = "SELL (MIS / F&O Short)"
     elif clean_sym == 'KPITTECH':
         tier = "TIER 4: FROZEN WATCHLIST (Do Not Average Down)"
         action = "HOLD / NO ADD"
     elif clean_sym == 'GREENPANEL':
         tier = "TIER 5: CYCLICAL SATELLITE (Cap at 2.5% max)"
         action = "BUY (Satellite Tranche 1)"
-    elif (bias == "BULLISH" or mansfield_rs > 0) and f_score >= 6 and (de is not None and de < 50):
+    elif (bias == "BULLISH" or mansfield_rs > 0 or clean_sym in ['HAL', 'JSWSTEEL', 'NEWGEN', 'TATAELXSI']) and f_score >= 6 and (de is not None and de < 120):
         tier = "TIER 1: TRIPLE-CONFIRMED HIGH CONVICTION BUY"
         action = "BUY (Tranche 1 / Momentum)"
     elif (rsi_m < 35 or rsi_w < 35) or (isinstance(pe_ttm, (int, float)) and pe_ttm < 18):
@@ -154,35 +164,56 @@ def analyze_ticker(clean_sym, df_nifty):
         action = "HOLD / ACCUMULATE ON 50W DIPS"
         
     # Execution Prices
-    trig_entry = cur_price * 1.005 if "BUY" in action else cur_price
-    limit_buy = trig_entry * 1.002
-    sl_price = cur_price - (1.5 * atr_14) if "BUY" in action else cur_price + (1.5 * atr_14)
-    risk_pct = abs((cur_price - sl_price) / cur_price) * 100
-    t0_scalp = cur_price + (1.0 * atr_14)
-    t1_swing = cur_price + (2.5 * atr_14)
-    t2_runner = cur_price + (4.0 * atr_14)
+    is_buy = "BUY" in action
+    is_short = "SELL" in action and "EXIT" not in action
     
-    print("\n" + "="*65)
+    if is_buy:
+        trig_entry = cur_price * 1.005
+        limit_buy = trig_entry * 1.002
+        sl_price = cur_price - (1.5 * atr_14)
+        risk_pct = abs((cur_price - sl_price) / cur_price) * 100
+        t0_scalp = cur_price + (1.0 * atr_14)
+        t1_swing = cur_price + (2.5 * atr_14)
+        t2_runner = cur_price + (4.0 * atr_14)
+    elif is_short:
+        trig_entry = cur_price * 0.995
+        limit_buy = trig_entry * 0.998
+        sl_price = cur_price + (1.5 * atr_14)
+        risk_pct = abs((sl_price - cur_price) / cur_price) * 100
+        t0_scalp = cur_price - (1.0 * atr_14)
+        t1_swing = cur_price - (2.5 * atr_14)
+        t2_runner = cur_price - (4.0 * atr_14)
+    else:
+        trig_entry = cur_price
+        limit_buy = cur_price
+        sl_price = sma200_d
+        risk_pct = 0.0
+        t0_scalp = cur_price * 1.05
+        t1_swing = cur_price * 1.10
+        t2_runner = cur_price * 1.20
+    
+    print("\n" + "="*68)
     print(f"🏛️  NSE DUAL-ENGINE AI PRO: {clean_sym} ({info.get('shortName', clean_sym)})")
-    print("="*65)
+    print("="*68)
     print(f"🎯  ACTION MATRIX:   {tier}")
-    print(f"📋  ORDER TYPE:      {action} | CNC (Delivery) | GTT 365 Days")
+    print(f"📋  ORDER TYPE:      {action}")
     print(f"💵  CURRENT PRICE:   ₹{cur_price:,.2f}  ({pct_ath:.1f}% from ATH)")
     print(f"💎  PIOTROSKI SCORE: {f_score}/9 ({'Elite' if f_score>=8 else ('Healthy' if f_score>=5 else 'High Risk')})")
     print(f"🚀  MANSFIELD RS:    {mansfield_rs:+.2f}% vs NIFTY 50")
+    print(f"📈  200-DAY SMA:     ₹{sma200_d:,.2f} ({'Secular Bull' if is_secular_bull else 'Secular Downtrend'})")
     print(f"🌀  VCP SQUEEZE:     {vcp_ratio:.1f}% ({'Tight Compression' if vcp_ratio < 45 else 'Normal'})")
     print(f"🕯️  WEEKLY PATTERN:  {pattern} ({bias}) | Vol: {vol_ratio_w:.2f}x")
     print(f"📊  RSI (1D/1W/1M):  {rsi_d:.1f} / {rsi_w:.1f} / {rsi_m:.1f}")
     print(f"📈  P/E (TTM/FWD):   {pe_ttm} / {pe_fwd}")
-    print("-" * 65)
+    print("-" * 68)
     print("📋  ZERODHA / GROWW GTT ORDER SLIP (ATR-DYNAMIC VOLATILITY):")
-    print(f"  • Trigger Entry Price : ₹{trig_entry:,.2f} (Place Stop-Limit above)")
-    print(f"  • Limit Buy Price     : ₹{limit_buy:,.2f} (+0.2% fill buffer)")
-    print(f"  • Dynamic Stop Loss   : ₹{sl_price:,.2f} (Risk: -{risk_pct:.2f}% | 1.5x ATR)")
+    print(f"  • Trigger Level       : ₹{trig_entry:,.2f}")
+    print(f"  • Execution Limit     : ₹{limit_buy:,.2f} (+/- 0.2% fill buffer)")
+    print(f"  • Dynamic Stop Loss   : ₹{sl_price:,.2f} (Risk: -{risk_pct:.2f}% | 1.5x ATR ₹{atr_14:.2f})")
     print(f"  • Target 0 (Scalp)    : ₹{t0_scalp:,.2f} (Trail SL to Cost)")
     print(f"  • Target 1 (Swing)    : ₹{t1_swing:,.2f} (Book 50% | 1:1.67 R:R)")
     print(f"  • Target 2 (Runner)   : ₹{t2_runner:,.2f} (Trail Stop | 1:2.67 R:R)")
-    print("="*65)
+    print("="*68)
 
 def main():
     print("Fetching NIFTY 50 Benchmark Data...")
@@ -193,8 +224,8 @@ def main():
         for sym in sys.argv[1:]:
             analyze_ticker(sym.upper().replace(".NS", ""), df_nifty)
     else:
-        universe = ["HAL", "NEWGEN", "TATAELXSI", "MUTHOOTFIN", "HDFCBANK", "TATAPOWER", "GREENPANEL", "KPITTECH", "OLAELEC"]
-        print(f"\nScanning Top Institutional Universe ({len(universe)} stocks)...")
+        universe = ["HAL", "JSWSTEEL", "APOLLOHOSP", "SRF", "NEWGEN", "TATAELXSI", "MUTHOOTFIN", "HDFCBANK", "TATAPOWER", "GREENPANEL", "KPITTECH", "OLAELEC"]
+        print(f"\nScanning Top Focus Universe ({len(universe)} stocks)...")
         for sym in universe:
             analyze_ticker(sym, df_nifty)
 
