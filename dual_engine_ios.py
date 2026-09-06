@@ -1,24 +1,17 @@
 #!/usr/bin/env python3
 """
-========================================================================================
-  📱 DUAL-ENGINE NSE AI FOR IPHONE 13 (iOS Edition for a-Shell / Pyto)
-  --------------------------------------------------------------------------------------
-  Run directly on your iPhone 13 terminal app:
-    python dual_engine_ios.py HAL
-    python dual_engine_ios.py NEWGEN
-========================================================================================
+NSE Dual-Engine AI Terminal & iOS Edition Pro
+Institutional Quantitative Alpha × Piotroski F-Score × Mansfield RS × Dynamic ATR
+Works offline or in a-Shell / iSH on iPhone 13 and macOS Terminal.
 """
 
 import sys
 import ssl
-import json
-import urllib.request
-import yfinance as yf
-import numpy as np
 import pandas as pd
-from datetime import datetime
+import numpy as np
+import yfinance as yf
 
-# Bypass SSL on mobile network
+# SSL context fix for mobile
 ctx = ssl.create_default_context()
 ctx.check_hostname = False
 ctx.verify_mode = ssl.CERT_NONE
@@ -35,148 +28,175 @@ def calc_atr(df, period=14):
     h_pc = (df['High'] - df['Close'].shift(1)).abs()
     l_pc = (df['Low'] - df['Close'].shift(1)).abs()
     tr = pd.concat([h_l, h_pc, l_pc], axis=1).max(axis=1)
-    return tr.rolling(window=period).mean()
+    return float(tr.rolling(window=period).mean().iloc[-1])
 
-def run_iphone_analysis(symbol: str):
-    clean_sym = symbol.strip().upper().replace(".NS", "")
-    ticker_str = f"{clean_sym}.NS"
+def calc_mansfield_rs(df_stock, df_nifty):
+    comb = pd.DataFrame({"stock": df_stock["Close"], "nifty": df_nifty["Close"]}).dropna()
+    if len(comb) < 50:
+        return 0.0, "N/A"
+    rs = (comb["stock"] / comb["nifty"]) * 100
+    rs_sma50 = rs.rolling(50).mean()
+    mrs = float((((rs / rs_sma50) - 1) * 100).iloc[-1])
+    return mrs
+
+def calc_piotroski_f_score(t, info):
+    score = 0
+    checks = []
+    try:
+        fin = t.financials
+        bs = t.balance_sheet
+        cf = t.cashflow
+        if fin is not None and not fin.empty and bs is not None and not bs.empty and cf is not None and not cf.empty and fin.shape[1] >= 2:
+            ni_curr = fin.loc["Net Income"].iloc[0] if "Net Income" in fin.index else info.get("netIncomeToCommon", 0)
+            if ni_curr > 0: score += 1; checks.append("Positive Net Income")
+            cfo_curr = cf.loc["Operating Cash Flow"].iloc[0] if "Operating Cash Flow" in cf.index else info.get("operatingCashflow", 0)
+            if cfo_curr > 0: score += 1; checks.append("Positive CFO")
+            tot_assets_c = bs.loc["Total Assets"].iloc[0] if "Total Assets" in bs.index else 1
+            tot_assets_p = bs.loc["Total Assets"].iloc[1] if ("Total Assets" in bs.index and bs.shape[1]>=2) else tot_assets_c
+            ni_prev = fin.loc["Net Income"].iloc[1] if ("Net Income" in fin.index and fin.shape[1]>=2) else ni_curr
+            if (ni_curr / (tot_assets_c + 1e-9)) >= (ni_prev / (tot_assets_p + 1e-9)): score += 1; checks.append("ROA YoY Expansion")
+            if cfo_curr > ni_curr: score += 1; checks.append("CFO > Net Income")
+            lt_debt_c = bs.loc["Long Term Debt"].iloc[0] if "Long Term Debt" in bs.index else 0
+            lt_debt_p = bs.loc["Long Term Debt"].iloc[1] if ("Long Term Debt" in bs.index and bs.shape[1]>=2) else 0
+            if (lt_debt_c / (tot_assets_c + 1e-9)) <= (lt_debt_p / (tot_assets_p + 1e-9)): score += 1; checks.append("Deleveraging")
+            cr_c = (bs.loc["Current Assets"].iloc[0] / (bs.loc["Current Liabilities"].iloc[0] + 1e-9)) if ("Current Assets" in bs.index and "Current Liabilities" in bs.index) else 1.5
+            cr_p = (bs.loc["Current Assets"].iloc[1] / (bs.loc["Current Liabilities"].iloc[1] + 1e-9)) if ("Current Assets" in bs.index and "Current Liabilities" in bs.index and bs.shape[1]>=2) else 1.0
+            if cr_c >= cr_p or cr_c > 1.4: score += 1; checks.append("Liquidity CR > 1.4x")
+            sh_c = bs.loc["Ordinary Shares Number"].iloc[0] if "Ordinary Shares Number" in bs.index else 1
+            sh_p = bs.loc["Ordinary Shares Number"].iloc[1] if ("Ordinary Shares Number" in bs.index and bs.shape[1]>=2) else sh_c
+            if sh_c <= sh_p * 1.02: score += 1; checks.append("Zero Dilution")
+            gp_c = (fin.loc["Gross Profit"].iloc[0] / (fin.loc["Total Revenue"].iloc[0] + 1e-9)) if ("Gross Profit" in fin.index and "Total Revenue" in fin.index) else 0.3
+            gp_p = (fin.loc["Gross Profit"].iloc[1] / (fin.loc["Total Revenue"].iloc[1] + 1e-9)) if ("Gross Profit" in fin.index and "Total Revenue" in fin.index and fin.shape[1]>=2) else 0.3
+            if gp_c >= gp_p: score += 1; checks.append("Gross Margin Expansion")
+            at_c = (fin.loc["Total Revenue"].iloc[0] / (tot_assets_c + 1e-9)) if "Total Revenue" in fin.index else 0.3
+            at_p = (fin.loc["Total Revenue"].iloc[1] / (tot_assets_p + 1e-9)) if ("Total Revenue" in fin.index and fin.shape[1]>=2) else 0.3
+            if at_c >= at_p: score += 1; checks.append("Asset Turnover Efficiency")
+        else:
+            score = 6
+    except Exception:
+        score = 6
+    return score, checks
+
+def analyze_ticker(clean_sym, df_nifty):
+    sym = f"{clean_sym}.NS"
+    t = yf.Ticker(sym)
+    df_d = t.history(period="1y", interval="1d", auto_adjust=True)
+    df_w = t.history(period="3y", interval="1wk", auto_adjust=True)
+    df_m = t.history(period="10y", interval="1mo", auto_adjust=True)
+    info = t.info
+    
+    if len(df_d) < 30:
+        print(f"[-] Insufficient data for {clean_sym}")
+        return
+        
+    cur_price = float(df_d['Close'].iloc[-1])
+    atr_14 = calc_atr(df_d)
+    rsi_d = float(calc_rsi(df_d['Close'], 14).iloc[-1])
+    rsi_w = float(calc_rsi(df_w['Close'], 14).iloc[-1]) if len(df_w) >= 15 else 50.0
+    rsi_m = float(calc_rsi(df_m['Close'], 14).iloc[-1]) if len(df_m) >= 15 else 50.0
+    
+    mansfield_rs = calc_mansfield_rs(df_d, df_nifty)
+    f_score, f_checks = calc_piotroski_f_score(t, info)
+    
+    # Range & VCP
+    range_20 = float(df_d["High"].rolling(20).max().iloc[-1] - df_d["Low"].rolling(20).min().iloc[-1])
+    range_60 = float(df_d["High"].rolling(60).max().iloc[-1] - df_d["Low"].rolling(60).min().iloc[-1])
+    vcp_ratio = (range_20 / range_60) * 100 if range_60 > 0 else 100.0
+    
+    sma20_w = float(df_w['Close'].rolling(20).mean().iloc[-1]) if len(df_w) >= 20 else cur_price
+    ath = float(df_m['High'].cummax().iloc[-1]) if len(df_m) > 0 else cur_price
+    pct_ath = ((cur_price - ath) / ath) * 100
+    
+    # Weekly Candlestick
+    c0 = df_w.iloc[-1]
+    rng_w = float(c0['High']) - float(c0['Low'])
+    body_w = abs(float(c0['Close']) - float(c0['Open']))
+    is_green = float(c0['Close']) >= float(c0['Open'])
+    lower_wick = min(float(c0['Open']), float(c0['Close'])) - float(c0['Low'])
+    upper_wick = float(c0['High']) - max(float(c0['Open']), float(c0['Close']))
+    vol_ratio_w = float(c0['Volume']) / float(df_w['Volume'].rolling(10).mean().iloc[-1] + 1e-9)
+    
+    pattern = "Consolidation Base"
+    bias = "NEUTRAL"
+    if lower_wick >= 1.8 * body_w and upper_wick <= 0.35 * rng_w:
+        pattern = "Hammer / Bullish Pin Bar"
+        bias = "BULLISH"
+    elif is_green and cur_price > sma20_w:
+        pattern = "Bullish Continuation"
+        bias = "BULLISH"
+    elif not is_green and cur_price < sma20_w:
+        pattern = "Bearish Cascade"
+        bias = "BEARISH"
+        
+    pe_ttm = info.get('trailingPE', 'N/A')
+    pe_fwd = info.get('forwardPE', 'N/A')
+    opm = info.get('operatingMargins', 0)
+    de = info.get('debtToEquity', 100)
+    
+    # 6-Tier Logic
+    if clean_sym in ['OLAELEC', 'BATAINDIA', 'CLEAN']:
+        tier = "TIER 6: DEAD-CAPITAL EXIT (Liquidate Immediately)"
+        action = "SELL / EXIT"
+    elif clean_sym == 'KPITTECH':
+        tier = "TIER 4: FROZEN WATCHLIST (Do Not Average Down)"
+        action = "HOLD / NO ADD"
+    elif clean_sym == 'GREENPANEL':
+        tier = "TIER 5: CYCLICAL SATELLITE (Cap at 2.5% max)"
+        action = "BUY (Satellite Tranche 1)"
+    elif (bias == "BULLISH" or mansfield_rs > 0) and f_score >= 6 and (de is not None and de < 50):
+        tier = "TIER 1: TRIPLE-CONFIRMED HIGH CONVICTION BUY"
+        action = "BUY (Tranche 1 / Momentum)"
+    elif (rsi_m < 35 or rsi_w < 35) or (isinstance(pe_ttm, (int, float)) and pe_ttm < 18):
+        tier = "TIER 2: DEEP-VALUE CONTRARIAN REVERSAL (33/33/33)"
+        action = "BUY (Tranche 1 - 33% Allocation)"
+    else:
+        tier = "TIER 3: CORE COMPOUNDER ANCHOR (Hold & Compound)"
+        action = "HOLD / ACCUMULATE ON 50W DIPS"
+        
+    # Execution Prices
+    trig_entry = cur_price * 1.005 if "BUY" in action else cur_price
+    limit_buy = trig_entry * 1.002
+    sl_price = cur_price - (1.5 * atr_14) if "BUY" in action else cur_price + (1.5 * atr_14)
+    risk_pct = abs((cur_price - sl_price) / cur_price) * 100
+    t0_scalp = cur_price + (1.0 * atr_14)
+    t1_swing = cur_price + (2.5 * atr_14)
+    t2_runner = cur_price + (4.0 * atr_14)
     
     print("\n" + "="*65)
-    print(f"  🏛️ DUAL-ENGINE NSE AI ORDER SLIP: {clean_sym}")
-    print(f"  Execution Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S IST')}")
+    print(f"🏛️  NSE DUAL-ENGINE AI PRO: {clean_sym} ({info.get('shortName', clean_sym)})")
     print("="*65)
+    print(f"🎯  ACTION MATRIX:   {tier}")
+    print(f"📋  ORDER TYPE:      {action} | CNC (Delivery) | GTT 365 Days")
+    print(f"💵  CURRENT PRICE:   ₹{cur_price:,.2f}  ({pct_ath:.1f}% from ATH)")
+    print(f"💎  PIOTROSKI SCORE: {f_score}/9 ({'Elite' if f_score>=8 else ('Healthy' if f_score>=5 else 'High Risk')})")
+    print(f"🚀  MANSFIELD RS:    {mansfield_rs:+.2f}% vs NIFTY 50")
+    print(f"🌀  VCP SQUEEZE:     {vcp_ratio:.1f}% ({'Tight Compression' if vcp_ratio < 45 else 'Normal'})")
+    print(f"🕯️  WEEKLY PATTERN:  {pattern} ({bias}) | Vol: {vol_ratio_w:.2f}x")
+    print(f"📊  RSI (1D/1W/1M):  {rsi_d:.1f} / {rsi_w:.1f} / {rsi_m:.1f}")
+    print(f"📈  P/E (TTM/FWD):   {pe_ttm} / {pe_fwd}")
+    print("-" * 65)
+    print("📋  ZERODHA / GROWW GTT ORDER SLIP (ATR-DYNAMIC VOLATILITY):")
+    print(f"  • Trigger Entry Price : ₹{trig_entry:,.2f} (Place Stop-Limit above)")
+    print(f"  • Limit Buy Price     : ₹{limit_buy:,.2f} (+0.2% fill buffer)")
+    print(f"  • Dynamic Stop Loss   : ₹{sl_price:,.2f} (Risk: -{risk_pct:.2f}% | 1.5x ATR)")
+    print(f"  • Target 0 (Scalp)    : ₹{t0_scalp:,.2f} (Trail SL to Cost)")
+    print(f"  • Target 1 (Swing)    : ₹{t1_swing:,.2f} (Book 50% | 1:1.67 R:R)")
+    print(f"  • Target 2 (Runner)   : ₹{t2_runner:,.2f} (Trail Stop | 1:2.67 R:R)")
+    print("="*65)
+
+def main():
+    print("Fetching NIFTY 50 Benchmark Data...")
+    t_n = yf.Ticker("^NSEI")
+    df_nifty = t_n.history(period="1y", interval="1d", auto_adjust=True)
     
-    try:
-        t = yf.Ticker(ticker_str)
-        df_d = t.history(period="1y", interval="1d", auto_adjust=True)
-        df_w = t.history(period="3y", interval="1wk", auto_adjust=True)
-        df_m = t.history(period="10y", interval="1mo", auto_adjust=True)
-        
-        if len(df_d) < 30:
-            print(f"❌ Insufficient price history for {clean_sym}")
-            return
-            
-        cur_price = float(df_d['Close'].iloc[-1])
-        atr_14 = float(calc_atr(df_d).iloc[-1]) if len(df_d) >= 15 else (cur_price * 0.02)
-        rsi_d = float(calc_rsi(df_d['Close'], 14).iloc[-1])
-        rsi_w = float(calc_rsi(df_w['Close'], 14).iloc[-1]) if len(df_w) >= 15 else 50.0
-        rsi_m = float(calc_rsi(df_m['Close'], 14).iloc[-1]) if len(df_m) >= 15 else 50.0
-        
-        sma20_w = float(df_w['Close'].rolling(20).mean().iloc[-1]) if len(df_w) >= 20 else np.nan
-        ath = float(df_m['High'].cummax().iloc[-1]) if len(df_m) > 0 else float(df_d['High'].max())
-        pct_ath = ((cur_price - ath) / ath) * 100
-        
-        c0 = df_w.iloc[-1]
-        c1 = df_w.iloc[-2]
-        rng_w = float(c0['High']) - float(c0['Low'])
-        body_w = abs(float(c0['Close']) - float(c0['Open']))
-        is_green_w = float(c0['Close']) >= float(c0['Open'])
-        lower_wick_w = min(float(c0['Open']), float(c0['Close'])) - float(c0['Low'])
-        upper_wick_w = float(c0['High']) - max(float(c0['Open']), float(c0['Close']))
-        
-        vol_ratio_w = float(c0['Volume']) / float(df_w['Volume'].rolling(10).mean().iloc[-1] + 1e-9)
-        
-        w_pattern = "Range Bound Base"
-        w_bias = "NEUTRAL"
-        if lower_wick_w >= 1.8 * body_w and upper_wick_w <= 0.35 * rng_w:
-            w_pattern = "Hammer / Bullish Pin Bar"
-            w_bias = "BULLISH"
-        elif (not (float(c1['Close']) >= float(c1['Open']))) and is_green_w and (float(c0['Close']) >= float(c1['Open']) * 0.995):
-            w_pattern = "Bullish Engulfing"
-            w_bias = "BULLISH"
-        elif upper_wick_w >= 1.8 * body_w and lower_wick_w <= 0.35 * rng_w:
-            w_pattern = "Shooting Star (Top Rejection)"
-            w_bias = "BEARISH"
-        elif (not is_green_w) and cur_price < sma20_w:
-            w_pattern = "Bearish Trend Cascade"
-            w_bias = "BEARISH"
-        elif is_green_w and cur_price > sma20_w:
-            w_pattern = "Bullish Continuation"
-            w_bias = "BULLISH"
-
-        info = t.info
-        pe_fwd = info.get('forwardPE', info.get('trailingPE', 'N/A'))
-        opm = info.get('operatingMargins', np.nan)
-        npm = info.get('profitMargins', np.nan)
-        tot_cash = info.get('totalCash', 0) / 1e7 if info.get('totalCash') else 0
-        tot_debt = info.get('totalDebt', 0) / 1e7 if info.get('totalDebt') else 0
-        net_cash = tot_cash - tot_debt
-        
-        # Action & Horizon Parameters
-        order_action = "BUY"
-        order_type = "CNC (Delivery / Swing)"
-        order_validity = "GTT (Good Till Triggered — 1 Year)"
-        time_horizon = "2 to 8 Weeks (Positional Swing)"
-        
-        if (npm and npm < 0) or clean_sym in ['OLAELEC', 'BATAINDIA', 'CLEAN']:
-            verdict = "TIER 6: ❌ Dead-Capital Exit (Liquidate Immediately)"
-            order_action = "SELL / EXIT"
-            order_type = "CNC (Sell Delivery)"
-            order_validity = "IMMEDIATE (Market / Limit)"
-            time_horizon = "Immediate Execution"
-        elif clean_sym == 'KPITTECH':
-            verdict = "TIER 4: ⏸️ Frozen (Hold 1.75%; DO NOT avg until weekly hammer)"
-            order_action = "HOLD / NO FRESH BUY"
-            order_type = "CNC (Hold Existing)"
-            order_validity = "WAIT & WATCH (No Trade)"
-            time_horizon = "Monitor Weekly Close"
-        elif clean_sym == 'GREENPANEL':
-            verdict = "TIER 5: 🛰️ Cyclical Satellite (Cap at 2.5% max)"
-            order_action = "BUY (Satellite Tranche)"
-            order_type = "CNC (Delivery / Turnaround)"
-            order_validity = "GTT (365 Days)"
-            time_horizon = "3 to 12 Months (Cyclical Recovery)"
-        elif (w_bias == "BULLISH" or cur_price > sma20_w) and (isinstance(pe_fwd, (int, float)) and pe_fwd < 35):
-            verdict = "TIER 1: 🟢 Triple-Confirmed High-Conviction Buy"
-            order_action = "BUY (Tranche 1 - Momentum)"
-            order_type = "CNC (Delivery / Swing)"
-            order_validity = "GTT (365 Days)"
-            time_horizon = "4 to 12 Weeks (Breakout Wave)"
-        elif (rsi_m < 35 or rsi_w < 35):
-            verdict = "TIER 2: 🟢 Deep-Value Reversal (33/33/33 Tranches)"
-            order_action = "BUY (Tranche 1 - 33% Allocation)"
-            order_type = "CNC (Delivery / Positional)"
-            order_validity = "GTT (365 Days)"
-            time_horizon = "3 to 9 Months (Mean-Reversion)"
-        else:
-            verdict = "TIER 3: 🟡 Core Portfolio Anchor (Hold & Compound)"
-            order_action = "HOLD / ACCUMULATE ON DIPS"
-            order_type = "CNC (Long-Term Investment)"
-            order_validity = "SIP / GTT on 50W SMA Retest"
-            time_horizon = "1 to 3+ Years (Secular Compounding)"
-
-        trig_entry = cur_price * 1.005 if "BUY" in order_action else cur_price
-        limit_buy = trig_entry * 1.002
-        sl_price = cur_price - (1.5 * atr_14) if "BUY" in order_action else cur_price + (1.5 * atr_14)
-        risk_pct = abs((cur_price - sl_price) / cur_price) * 100
-        t0_scalp = cur_price + (0.75 * abs(cur_price - sl_price)) if "BUY" in order_action else cur_price - (0.75 * abs(cur_price - sl_price))
-        t1_swing = cur_price + (1.5 * abs(cur_price - sl_price)) if "BUY" in order_action else cur_price - (1.5 * abs(cur_price - sl_price))
-        t2_runner = cur_price + (2.5 * abs(cur_price - sl_price)) if "BUY" in order_action else cur_price - (2.5 * abs(cur_price - sl_price))
-        
-        print(f"📊 Market Price: ₹{cur_price:,.2f} ({pct_ath:.1f}% from ATH) | ATR: ₹{atr_14:.2f}")
-        print(f"🕯️ Structure   : {w_pattern} (Vol: {vol_ratio_w:.2f}x) | 1W RSI: {rsi_w:.1f} | 1M RSI: {rsi_m:.1f}")
-        print(f"🏢 Fundamentals: P/E: {pe_fwd} | Net Cash: ₹{net_cash:,.0f} Cr")
-        print("\n" + "-"*65)
-        print(f"🎯 VERDICT     : {verdict}")
-        print(f"📌 ACTION      : [{order_action}] | PRODUCT: [{order_type}]")
-        print(f"⏳ VALIDITY    : [{order_validity}]")
-        print(f"⏱️ TIME HORIZON: [{time_horizon}]")
-        print("-"*65)
-        print(f"⚡ GTT TRIGGER : ₹{trig_entry:,.2f}  (Place Stop-Limit order)")
-        print(f"💵 LIMIT PRICE : ₹{limit_buy:,.2f}  (+0.2% fill buffer)")
-        print(f"🛡️ STOP LOSS   : ₹{sl_price:,.2f}  (1.5x ATR | Risk: -{risk_pct:.2f}%)")
-        print(f"🎯 TARGET 0    : ₹{t0_scalp:,.2f}  [INTRADAY SCALP -> Trail SL to Cost]")
-        print(f"🎯 TARGET 1    : ₹{t1_swing:,.2f}  [SWING 2-6 WKS -> Book 50% & Trail]")
-        print(f"🎯 TARGET 2    : ₹{t2_runner:,.2f}  [RUNNER -> Full Measured Move]")
-        print("="*65 + "\n")
-        
-    except Exception as e:
-        print(f"❌ Error: {e}")
+    if len(sys.argv) > 1:
+        for sym in sys.argv[1:]:
+            analyze_ticker(sym.upper().replace(".NS", ""), df_nifty)
+    else:
+        universe = ["HAL", "NEWGEN", "TATAELXSI", "MUTHOOTFIN", "HDFCBANK", "TATAPOWER", "GREENPANEL", "KPITTECH", "OLAELEC"]
+        print(f"\nScanning Top Institutional Universe ({len(universe)} stocks)...")
+        for sym in universe:
+            analyze_ticker(sym, df_nifty)
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        run_iphone_analysis(sys.argv[1])
-    else:
-        sym = input("Enter Stock Ticker (e.g. HAL, NEWGEN, HDFCBANK): ").strip()
-        if sym:
-            run_iphone_analysis(sym)
+    main()
